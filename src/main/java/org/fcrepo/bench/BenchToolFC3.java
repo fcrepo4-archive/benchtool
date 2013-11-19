@@ -33,7 +33,7 @@ public class BenchToolFC3 {
 
     private final OutputStream ingestOut;
 
-    public BenchToolFC3(String fedoraUri, String user, String pass)
+    public BenchToolFC3(String fedoraUri, final String user, final String pass)
             throws IOException {
         super();
         ingestOut = new FileOutputStream("ingest.log");
@@ -47,14 +47,14 @@ public class BenchToolFC3 {
                 new UsernamePasswordCredentials(user, pass));
     }
 
-    private String ingestObject(String label) throws Exception {
-        HttpPost post =
+    private String ingestObject(final String label) throws Exception {
+        final HttpPost post =
                 new HttpPost(
                         fedoraUri.toASCIIString() +
                                 "/objects/new?format=info:fedora/fedora-system:FOXML-1.1&label=" +
                                 label);
-        HttpResponse resp = client.execute(post);
-        String answer = IOUtils.toString(resp.getEntity().getContent());
+        final HttpResponse resp = client.execute(post);
+        final String answer = IOUtils.toString(resp.getEntity().getContent());
         post.releaseConnection();
 
         if (resp.getStatusLine().getStatusCode() != 201) {
@@ -64,15 +64,15 @@ public class BenchToolFC3 {
         return answer;
     }
 
-    private void ingestDatastream(String objectId, String label, int size)
+    private void ingestDatastream(final String objectId, final String label, final int size)
             throws Exception {
-        HttpPost post = new HttpPost(fedoraUri.toASCIIString() + "/objects/"
+        final HttpPost post = new HttpPost(fedoraUri.toASCIIString() + "/objects/"
                 + objectId + "/datastreams/" + label
                 + "?versionable=true&controlGroup=M");
         post.setHeader("Content-Type", "application/octet-stream");
         post.setEntity(new ByteArrayEntity(getRandomBytes(size)));
-        long start = System.currentTimeMillis();
-        HttpResponse resp = client.execute(post);
+        final long start = System.currentTimeMillis();
+        final HttpResponse resp = client.execute(post);
         IOUtils.write((System.currentTimeMillis() - start) + "\n", ingestOut);
         post.releaseConnection();
         if (resp.getStatusLine().getStatusCode() != 201) {
@@ -81,9 +81,9 @@ public class BenchToolFC3 {
         }
     }
 
-    private byte[] getRandomBytes(int size) {
-        byte[] data = new byte[size];
-        Random r = new Random();
+    private byte[] getRandomBytes(final int size) {
+        final byte[] data = new byte[size];
+        final Random r = new XORShiftRandom();
         r.nextBytes(data);
         return data;
     }
@@ -92,30 +92,30 @@ public class BenchToolFC3 {
         IOUtils.closeQuietly(ingestOut);
     }
 
-    public static void main(String[] args) {
-        String uri = args[0];
-        String user = args[1];
-        String pass = args[2];
-        int numDatastreams = Integer.parseInt(args[3]);
-        int size = Integer.parseInt(args[4]);
+    public static void main(final String[] args) {
+        final String uri = args[0];
+        final String user = args[1];
+        final String pass = args[2];
+        final int numDatastreams = Integer.parseInt(args[3]);
+        final int size = Integer.parseInt(args[4]);
         BenchToolFC3 bench = null;
         System.out.println("generating " + numDatastreams +
                 " datastreams with size " + size);
-        long start = System.currentTimeMillis();
+        final long start = System.currentTimeMillis();
         try {
             bench = new BenchToolFC3(uri, user, pass);
             for (int i = 0; i < numDatastreams; i++) {
-                String objectId = bench.ingestObject("test-" +i);
+                final String objectId = bench.ingestObject("test-" +i);
                 bench.ingestDatastream(objectId, "ds-" + (i + 1), size);
-                float percent = (float) (i + 1) / (float) numDatastreams * 100f;
+                final float percent = (float) (i + 1) / (float) numDatastreams * 100f;
                 System.out.print("\r" + FORMATTER.format(percent) + "%");
             }
-            long duration = System.currentTimeMillis() - start;
+            final long duration = System.currentTimeMillis() - start;
             System.out.println(" - ingest datastreams finished");
             System.out.println("Complete ingest of " + numDatastreams + " files took " + duration + " ms\n");
             System.out.println("throughput was  " + FORMATTER.format((double) numDatastreams * (double) size /1024d / duration) + " mb/s\n");
 
-        } catch (Exception e) {
+        } catch (final Exception e) {
             e.printStackTrace();
         } finally {
             bench.shutdown();

@@ -30,36 +30,36 @@ public class BenchToolFC4 {
     private static int maxThreads = 15;
 
 
-    public static void main(String[] args) {
-        String uri = args[0];
-        int numDatastreams = Integer.parseInt(args[1]);
-        int size = Integer.parseInt(args[2]);
+    public static void main(final String[] args) {
+        final String uri = args[0];
+        final int numDatastreams = Integer.parseInt(args[1]);
+        final int size = Integer.parseInt(args[2]);
         maxThreads = Integer.parseInt(args[3]);
-        BenchToolFC4 bench = null;
+        final BenchToolFC4 bench = null;
         System.out.println("generating " + numDatastreams +
                 " datastreams with size " + size);
         FileOutputStream ingestOut = null;
         try {
             ingestOut = new FileOutputStream("ingest.log");
-            long start = System.currentTimeMillis();
+            final long start = System.currentTimeMillis();
             for (int i = 0; i < numDatastreams; i++) {
                 while (numThreads >= maxThreads){
                     Thread.sleep(10);
                 }
-                Thread t = new Thread(new Ingester(uri, ingestOut, "benchfc4-" + (i+1), size));
+                final Thread t = new Thread(new Ingester(uri, ingestOut, "benchfc4-" + (i+1), size));
                 t.start();
                 numThreads++;
-                float percent = (float) (i + 1) / (float) numDatastreams * 100f;
+                final float percent = (float) (i + 1) / (float) numDatastreams * 100f;
                 System.out.print("\r" + FORMATTER.format(percent) + "%");
             }
             while(numThreads > 0) {
                 Thread.sleep(100);
             }
-            long duration = System.currentTimeMillis() - start;
+            final long duration = System.currentTimeMillis() - start;
             System.out.println(" - ingest datastreams finished");
             System.out.println("Complete ingest of " + numDatastreams + " files took " + duration + " ms\n");
             System.out.println("throughput was  " + FORMATTER.format((double) numDatastreams * (double) size /1024d / duration) + " mb/s\n");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             e.printStackTrace();
         } finally {
             IOUtils.closeQuietly(ingestOut);
@@ -79,7 +79,7 @@ public class BenchToolFC4 {
 
         private final String pid;
 
-        public Ingester(String fedoraUri, OutputStream out, String pid, int size) throws IOException {
+        public Ingester(String fedoraUri, final OutputStream out, final String pid, final int size) throws IOException {
             super();
             ingestOut = out;
             if (fedoraUri.charAt(fedoraUri.length() - 1) == '/') {
@@ -93,18 +93,18 @@ public class BenchToolFC4 {
         public void run() {
             try {
                 this.ingestObject();
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 e.printStackTrace();
             }
         }
 
         private void ingestObject() throws Exception {
-            HttpPost post = new HttpPost(fedoraUri.toASCIIString() + "/rest/objects/" + pid + "/DS1/fcr:content");
+            final HttpPost post = new HttpPost(fedoraUri.toASCIIString() + "/rest/objects/" + pid + "/DS1/fcr:content");
             post.setHeader("Content-Type", "application/octet-stream");
             post.setEntity(new ByteArrayEntity(getRandomBytes(size)));
-            long start = System.currentTimeMillis();
-            HttpResponse resp = client.execute(post);
-            String answer = IOUtils.toString(resp.getEntity().getContent());
+            final long start = System.currentTimeMillis();
+            final HttpResponse resp = client.execute(post);
+            final String answer = IOUtils.toString(resp.getEntity().getContent());
             post.releaseConnection();
 
             if (resp.getStatusLine().getStatusCode() != 201) {
@@ -117,9 +117,9 @@ public class BenchToolFC4 {
             BenchToolFC4.numThreads--;
         }
 
-        private byte[] getRandomBytes(int size) {
-            byte[] data = new byte[size];
-            Random r = new Random();
+        private byte[] getRandomBytes(final int size) {
+            final byte[] data = new byte[size];
+            final Random r = new XORShiftRandom();
             r.nextBytes(data);
             return data;
         }
