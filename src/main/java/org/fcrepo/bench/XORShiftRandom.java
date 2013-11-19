@@ -18,7 +18,6 @@ public class XORShiftRandom extends Random {
     public XORShiftRandom() {
     }
 
-    @Override
     protected int next(final int nbits) {
         // N.B. Not thread-safe!
         long x = this.seed;
