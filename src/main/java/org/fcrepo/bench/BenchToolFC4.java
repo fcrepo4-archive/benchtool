@@ -5,36 +5,34 @@
 package org.fcrepo.bench;
 
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.nio.charset.Charset;
 import java.util.Random;
-import org.uncommons.maths.random.XORShiftRNG;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.io.LineIterator;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
-import org.apache.http.entity.InputStreamEntity;
+import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.uncommons.maths.random.XORShiftRNG;
 
 import com.hp.hpl.jena.rdf.model.Model;
 import com.hp.hpl.jena.rdf.model.ModelFactory;
-import com.hp.hpl.jena.rdf.model.RDFNode;
-import com.hp.hpl.jena.rdf.model.StmtIterator;
 import com.hp.hpl.jena.rdf.model.NodeIterator;
 import com.hp.hpl.jena.rdf.model.Property;
+import com.hp.hpl.jena.rdf.model.RDFNode;
 import com.hp.hpl.jena.rdf.model.Resource;
+import com.hp.hpl.jena.rdf.model.StmtIterator;
 
 /**
  * Fedora 4 Benchmarking Tool
@@ -49,15 +47,18 @@ public class BenchToolFC4 {
 
     private static int maxThreads = 15;
 
+    private static byte[] randomData;
+
+    private static long processingTime = 0;
 
     private static final Logger LOG =
             LoggerFactory.getLogger(BenchToolFC4.class);
 
 
-    private static int getClusterSize(String uri) throws IOException {
+    private static int getClusterSize(final String uri) throws IOException {
         final Model model = ModelFactory.createDefaultModel();
         model.read(uri + "/rest");
-        StmtIterator it = model.listStatements(model.createResource(uri + "/rest/") ,model.createProperty("http://fedora.info/definitions/v4/repository#clusterSize"), (RDFNode) null);
+        final StmtIterator it = model.listStatements(model.createResource(uri + "/rest/") ,model.createProperty("http://fedora.info/definitions/v4/repository#clusterSize"), (RDFNode) null);
         if (!it.hasNext()) {
             return 0;
         }
@@ -65,18 +66,18 @@ public class BenchToolFC4 {
 
     }
 
-    private static List<String> listObjects(String uri,int max) throws IOException {
-        DefaultHttpClient client = new DefaultHttpClient();
-        HttpGet get = new HttpGet(uri);
-        HttpResponse resp = client.execute(get);
-        List<String> pids = new ArrayList<String>();
-        Model m = ModelFactory.createDefaultModel();
+    private static List<String> listObjects(final String uri,final int max) throws IOException {
+        final DefaultHttpClient client = new DefaultHttpClient();
+        final HttpGet get = new HttpGet(uri);
+        final HttpResponse resp = client.execute(get);
+        final List<String> pids = new ArrayList<String>();
+        final Model m = ModelFactory.createDefaultModel();
         m.read( resp.getEntity().getContent(), null, "TURTLE" );
-        Property hasChild = m.createProperty(
+        final Property hasChild = m.createProperty(
                 "http://fedora.info/definitions/v4/repository#", "hasChild");
-        NodeIterator childNodes = m.listObjectsOfProperty(hasChild);
+        final NodeIterator childNodes = m.listObjectsOfProperty(hasChild);
         while ( childNodes.hasNext() ) {
-            RDFNode child = childNodes.next();
+            final RDFNode child = childNodes.next();
             if ( child.toString().startsWith(uri)
                     && child.toString().length() > uri.length() ) {
                 pids.add( child.toString().replaceAll(".*" + uri + "/","") );
@@ -86,34 +87,38 @@ public class BenchToolFC4 {
         get.releaseConnection();
         return pids;
     }
-    private static Model readProperties(String uri) throws IOException {
-        DefaultHttpClient client = new DefaultHttpClient();
-        HttpGet get = new HttpGet(uri);
-        HttpResponse resp = client.execute(get);
-        Model m = ModelFactory.createDefaultModel();
+    private static Model readProperties(final String uri) throws IOException {
+        final DefaultHttpClient client = new DefaultHttpClient();
+        final HttpGet get = new HttpGet(uri);
+        final HttpResponse resp = client.execute(get);
+        final Model m = ModelFactory.createDefaultModel();
         m.read( resp.getEntity().getContent(), null, "TURTLE" );
         get.releaseConnection();
         return m;
     }
 
-    public static void main(String[] args) {
-        String uri = args[0];
-        int numObjects = Integer.parseInt(args[1]);
-        long size = Long.parseLong(args[2]);
+    public static void main(final String[] args) throws IOException {
+        final String uri = args[0];
+        final int numObjects = Integer.parseInt(args[1]);
+        final long size = Long.parseLong(args[2]);
         maxThreads = Integer.parseInt(args[3]);
         String action = "ingest";
         if ( args.length > 4 ) { action = args[4]; }
-        BenchToolFC4 bench = null;
+        final BenchToolFC4 bench = null;
         if ( action != null && action.equals("delete") ) {
             LOG.info("deleting {} objects", numObjects);
         } else if ( action != null && action.equals("update") ) {
             LOG.info("updating {} objects with datastream size {}", numObjects, size);
+            randomData =
+                    IOUtils.toByteArray(new BenchToolInputStream(size), size);
         } else if ( action != null && action.equals("read") ) {
             LOG.info("reading {} objects with datastream size {}", numObjects, size);
         } else {
             LOG.info("ingesting {} objects with datastream size {}", numObjects, size);
+            randomData =
+                    IOUtils.toByteArray(new BenchToolInputStream(size), size);
         }
-       
+
         FileOutputStream ingestOut = null;
         List<String> pids = null;
         Random rnd = null;
@@ -126,40 +131,46 @@ public class BenchToolFC4 {
             final int initialClusterSize = getClusterSize(uri);
             LOG.info("Initial cluster size is {}", initialClusterSize);
             ingestOut = new FileOutputStream("ingest.log");
-            long start = System.currentTimeMillis();
+            final long start = System.currentTimeMillis();
             for (int i = 0; i < numObjects; i++) {
                 while (numThreads >= maxThreads) {
                     Thread.sleep(10);
                 }
                 String pid = "benchfc4-" + start + "-" + (i + 1);
                 if ( action != null &&
-                    (action.equals("update") || action.equals("delete") || action.equals("read")) ) {
+                        (action.equals("update") || action.equals("delete") || action.equals("read")) ) {
                     if ( pids == null ) {
                         pids = listObjects(uri + "/rest/objects",numObjects);
                     }
                     pid = pids.get( rnd.nextInt(pids.size()) );
                     if ( action.equals("delete") ) { pids.remove(pid); }
                 }
-                Thread t = new Thread(new Ingester(uri, ingestOut, pid, size,
+                final Thread t = new Thread(new ObjectProcessor(uri, ingestOut, pid, size,
                         action));
                 t.start();
                 numThreads++;
-                float percent = (float) (i + 1) / (float) numObjects * 100f;
+                final float percent = (float) (i + 1) / (float) numObjects * 100f;
                 System.out.print("\r" + FORMATTER.format(percent) + "%");
             }
             while (numThreads > 0) {
                 Thread.sleep(100);
             }
-            long duration = System.currentTimeMillis() - start;
+            final long duration = System.currentTimeMillis() - start;
             System.out.println(" - " + action + " finished");
-            LOG.info("Processing {} objects took {} ms", numObjects, duration);
+            final double avgProcessingTime = processingTime / maxThreads;
+            LOG.info(
+                    "Average total processing time for {} objects is {} ms per thread",
+                    numObjects,
+                    processingTime);
+            LOG.info("Overall client run time took {} ms", duration);
             final int endClusterSize = getClusterSize(uri);
             if (initialClusterSize != endClusterSize) {
                 LOG.warn("Initial cluster size was {} but the cluster had size {} at the end", initialClusterSize, endClusterSize);
             }
-            LOG.info("Throughput was {} mb/s",FORMATTER.format((double) numObjects * (double) size /
-                            1024d / duration));
-        } catch (Exception e) {
+            LOG.info("Throughput was {} mb/s", FORMATTER
+                    .format((double) numObjects * (double) size / 1024d /
+                    processingTime / maxThreads));
+        } catch (final Exception e) {
             e.printStackTrace();
         } finally {
             IOUtils.closeQuietly(ingestOut);
@@ -167,7 +178,7 @@ public class BenchToolFC4 {
 
     }
 
-    private static class Ingester implements Runnable {
+    private static class ObjectProcessor implements Runnable {
 
         private final DefaultHttpClient client = new DefaultHttpClient();
 
@@ -181,8 +192,8 @@ public class BenchToolFC4 {
 
         private final String action;
 
-        public Ingester( String fedoraUri, OutputStream out, String pid,
-                long size, String action) throws IOException {
+        public ObjectProcessor( String fedoraUri, final OutputStream out, final String pid,
+                final long size, final String action) throws IOException {
             super();
             ingestOut = out;
             if (fedoraUri.charAt(fedoraUri.length() - 1) == '/') {
@@ -206,21 +217,24 @@ public class BenchToolFC4 {
                 } else {
                     this.ingestObject();
                 }
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 e.printStackTrace();
             }
         }
 
         private void ingestObject() throws Exception {
-            HttpPost post =
+
+            final byte[] postData = rewriteData(BenchToolFC4.randomData, pid);
+            final HttpPost post =
                     new HttpPost(fedoraUri.toASCIIString() + "/rest/objects/" +
                             pid + "/DS1/fcr:content");
             post.setHeader("Content-Type", "application/octet-stream");
-            post.setEntity(new InputStreamEntity(new BenchToolInputStream(size), size));
-            long start = System.currentTimeMillis();
-            HttpResponse resp = client.execute(post);
-            String answer = IOUtils.toString(resp.getEntity().getContent());
+            post.setEntity(new ByteArrayEntity(postData));
+            final long start = System.currentTimeMillis();
+            final HttpResponse resp = client.execute(post);
+            final String answer = IOUtils.toString(resp.getEntity().getContent());
             post.releaseConnection();
+            final long end = System.currentTimeMillis();
 
             if (resp.getStatusLine().getStatusCode() != 201) {
                 LOG.error(answer);
@@ -229,33 +243,37 @@ public class BenchToolFC4 {
                         "Unable to ingest object, fedora returned " +
                                 resp.getStatusLine().getStatusCode());
             }
-            IOUtils.write((System.currentTimeMillis() - start) + "\n",
+
+            final long duration = end - start;
+            IOUtils.write(duration + "\n",
                     ingestOut);
             BenchToolFC4.numThreads--;
+            BenchToolFC4.processingTime += duration;
         }
 
         private void readObject() throws Exception {
-            long start = System.currentTimeMillis();
 
             // read properties
-            String objURI = fedoraUri.toASCIIString() + "/rest/objects/" + pid;
-            Model m = readProperties( objURI );
-            Property created = m.createProperty(
-            "http://fedora.info/definitions/v4/repository#", "created");
-            Resource objRes = m.getResource( objURI );
-            Resource dsRes = m.getResource( objURI + "/DS1" );
-            String objCreated = m.getProperty( objRes, created ).getString();
-            String dsCreated = m.getProperty( dsRes, created ).getString();
+            final String objURI = fedoraUri.toASCIIString() + "/rest/objects/" + pid;
+            final Model m = readProperties( objURI );
+            final Property created = m.createProperty(
+                    "http://fedora.info/definitions/v4/repository#", "created");
+            final Resource objRes = m.getResource( objURI );
+            final Resource dsRes = m.getResource( objURI + "/DS1" );
+            final String objCreated = m.getProperty( objRes, created ).getString();
+            final String dsCreated = m.getProperty( dsRes, created ).getString();
 
             // read datastream content
-            HttpGet get =
+            final HttpGet get =
                     new HttpGet(fedoraUri.toASCIIString() + "/rest/objects/" +
                             pid + "/DS1/fcr:content");
-            HttpResponse resp = client.execute(get);
-            InputStream in = resp.getEntity().getContent();
-            byte[] buf = new byte[8192];
+            final long start = System.currentTimeMillis();
+            final HttpResponse resp = client.execute(get);
+            final InputStream in = resp.getEntity().getContent();
+            final byte[] buf = new byte[8192];
             for ( int read = -1; (read = in.read(buf)) != -1;  ) { }
             get.releaseConnection();
+            final long end = System.currentTimeMillis();
 
             if (resp.getStatusLine().getStatusCode() != 200) {
                 BenchToolFC4.numThreads--;
@@ -263,20 +281,28 @@ public class BenchToolFC4 {
                         "Unable to read object: " + pid + ", fedora returned " +
                                 resp.getStatusLine().getStatusCode());
             }
-            IOUtils.write((System.currentTimeMillis() - start) + "\n",
+            final long duration = end - start;
+
+            IOUtils.write(duration + "\n",
                     ingestOut);
             BenchToolFC4.numThreads--;
+            BenchToolFC4.processingTime += duration;
         }
 
         private void updateObject() throws Exception {
-            HttpPut put =
+            final byte[] putData =
+                    rewriteData(BenchToolFC4.randomData, pid.concat(String
+                            .valueOf(System.currentTimeMillis())));
+
+            final HttpPut put =
                     new HttpPut(fedoraUri.toASCIIString() + "/rest/objects/" +
                             pid + "/DS1/fcr:content");
             put.setHeader("Content-Type", "application/octet-stream");
-            put.setEntity(new InputStreamEntity(new BenchToolInputStream(size),size));
-            long start = System.currentTimeMillis();
-            HttpResponse resp = client.execute(put);
+            put.setEntity(new ByteArrayEntity(putData));
+            final long start = System.currentTimeMillis();
+            final HttpResponse resp = client.execute(put);
             put.releaseConnection();
+            final long end = System.currentTimeMillis();
 
             if (resp.getStatusLine().getStatusCode() != 204) {
                 BenchToolFC4.numThreads--;
@@ -284,17 +310,21 @@ public class BenchToolFC4 {
                         "Unable to ingest object, fedora returned " +
                                 resp.getStatusLine().getStatusCode());
             }
-            IOUtils.write((System.currentTimeMillis() - start) + "\n",
+
+            final long duration = end - start;
+            IOUtils.write(duration + "\n",
                     ingestOut);
             BenchToolFC4.numThreads--;
+            BenchToolFC4.processingTime += duration;
         }
 
         private void deleteObject() throws Exception {
-            HttpDelete del = new HttpDelete(fedoraUri.toASCIIString()
-                + "/rest/objects/" + pid );
-            long start = System.currentTimeMillis();
-            HttpResponse resp = client.execute(del);
+            final HttpDelete del = new HttpDelete(fedoraUri.toASCIIString()
+                    + "/rest/objects/" + pid );
+            final long start = System.currentTimeMillis();
+            final HttpResponse resp = client.execute(del);
             del.releaseConnection();
+            final long end = System.currentTimeMillis();
 
             if (resp.getStatusLine().getStatusCode() != 204) {
                 BenchToolFC4.numThreads--;
@@ -302,10 +332,23 @@ public class BenchToolFC4 {
                         "Unable to delete object, fedora returned " +
                                 resp.getStatusLine().getStatusCode());
             }
-            IOUtils.write((System.currentTimeMillis() - start) + "\n",
+
+            final long duration = end - start;
+            IOUtils.write(duration + "\n",
                     ingestOut);
             BenchToolFC4.numThreads--;
+            BenchToolFC4.processingTime += duration;
         }
 
+        private byte[] rewriteData(final byte[] randomData,
+                final String pid) throws IOException {
+            final byte[] pidBytes = pid.getBytes();
+
+            for (int i = 0; i < pidBytes.length; i++) {
+                randomData[i] = pidBytes[i];
+            }
+
+            return randomData;
+        }
     }
 }
