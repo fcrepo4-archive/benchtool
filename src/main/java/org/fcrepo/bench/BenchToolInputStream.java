@@ -5,8 +5,8 @@ package org.fcrepo.bench;
 
 import java.io.IOException;
 import java.io.InputStream;
-
 import java.util.Random;
+
 import org.uncommons.maths.random.XORShiftRNG;
 
 
@@ -20,7 +20,7 @@ public class BenchToolInputStream extends InputStream {
     private long idx = 0;
     private final Random rng;
 
-    public BenchToolInputStream(long size) {
+    public BenchToolInputStream(final long size) {
         super();
         this.size = size;
 
@@ -41,7 +41,7 @@ public class BenchToolInputStream extends InputStream {
         if (idx++ <= size) {
             return rng.nextInt();
         }else {
-            throw new IOException("Inputstream size limit reached");
+            throw new IOException("Inputstream size limit reached: " + size);
         }
     }
 }
