@@ -161,13 +161,13 @@ public class BenchToolFC4 {
             LOG.info(
                     "Average total processing time for {} objects is {} ms per thread",
                     numObjects,
-                    processingTime);
+                    processingTime/maxThreads);
             LOG.info("Overall client run time took {} ms", duration);
             final int endClusterSize = getClusterSize(uri);
             if (initialClusterSize != endClusterSize) {
                 LOG.warn("Initial cluster size was {} but the cluster had size {} at the end", initialClusterSize, endClusterSize);
             }
-            LOG.info("Throughput was {} mb/s", FORMATTER
+            LOG.info("Throughput was {} mb/sec/thread", FORMATTER
                     .format((double) numObjects * (double) size / 1024d /
                     processingTime / maxThreads));
         } catch (final Exception e) {
