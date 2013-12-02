@@ -13,31 +13,30 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import org.uncommons.maths.random.XORShiftRNG;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.AuthCache;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
+import org.apache.http.client.protocol.ClientContext;
 import org.apache.http.entity.InputStreamEntity;
+import org.apache.http.impl.auth.BasicScheme;
+import org.apache.http.impl.client.BasicAuthCache;
 import org.apache.http.impl.client.DefaultHttpClient;
-
+import org.apache.http.protocol.BasicHttpContext;
+import org.uncommons.maths.random.XORShiftRNG;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-
-import org.apache.http.HttpHost;
-import org.apache.http.client.AuthCache;
-import org.apache.http.client.protocol.ClientContext;
-import org.apache.http.impl.auth.BasicScheme;
-import org.apache.http.impl.client.BasicAuthCache;
-import org.apache.http.protocol.BasicHttpContext;
 
 /**
  * Fedora 3 Benchmarking Tool
@@ -53,7 +52,16 @@ public class BenchToolFC3 {
     private final URI fedoraUri;
 
     private final OutputStream ingestOut;
+
     private final BasicHttpContext authContext;
+
+    private static byte[] randomSlice;
+
+    static {
+        BenchToolFC3.randomSlice = new byte[65535];
+        new XORShiftRNG().nextBytes(randomSlice);
+    }
+
 
     public BenchToolFC3(String fedoraUri, String user, String pass)
             throws IOException {
@@ -99,7 +107,7 @@ public class BenchToolFC3 {
                 + objectId + "/datastreams/" + label
                 + "?versionable=true&controlGroup=M");
         post.setHeader("Content-Type", "application/octet-stream");
-        post.setEntity(new InputStreamEntity(new BenchToolInputStream(size),size));
+        post.setEntity(new InputStreamEntity(new BenchToolInputStream(size, randomSlice),size));
         long start = System.currentTimeMillis();
         HttpResponse resp = client.execute(post,authContext);
         IOUtils.write((System.currentTimeMillis() - start) + "\n", ingestOut);
@@ -116,7 +124,7 @@ public class BenchToolFC3 {
                 + objectId + "/datastreams/" + label
                 + "?versionable=true&controlGroup=M");
         put.setHeader("Content-Type", "application/octet-stream");
-        put.setEntity(new InputStreamEntity(new BenchToolInputStream(size),size));
+        put.setEntity(new InputStreamEntity(new BenchToolInputStream(size, randomSlice),size));
         long start = System.currentTimeMillis();
         HttpResponse resp = client.execute(put,authContext);
         IOUtils.write((System.currentTimeMillis() - start) + "\n", ingestOut);

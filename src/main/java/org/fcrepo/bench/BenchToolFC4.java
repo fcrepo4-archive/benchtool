@@ -5,19 +5,16 @@
 package org.fcrepo.bench;
 
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.nio.charset.Charset;
 import java.util.Random;
-import org.uncommons.maths.random.XORShiftRNG;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.io.LineIterator;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
@@ -27,14 +24,15 @@ import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.uncommons.maths.random.XORShiftRNG;
 
 import com.hp.hpl.jena.rdf.model.Model;
 import com.hp.hpl.jena.rdf.model.ModelFactory;
-import com.hp.hpl.jena.rdf.model.RDFNode;
-import com.hp.hpl.jena.rdf.model.StmtIterator;
 import com.hp.hpl.jena.rdf.model.NodeIterator;
 import com.hp.hpl.jena.rdf.model.Property;
+import com.hp.hpl.jena.rdf.model.RDFNode;
 import com.hp.hpl.jena.rdf.model.Resource;
+import com.hp.hpl.jena.rdf.model.StmtIterator;
 
 /**
  * Fedora 4 Benchmarking Tool
@@ -45,10 +43,29 @@ public class BenchToolFC4 {
 
     private static final DecimalFormat FORMATTER = new DecimalFormat("000.00");
 
+
     private static int numThreads = 0;
 
     private static int maxThreads = 15;
 
+    private static byte[] randomSlice;
+
+    private final Random rnd;
+
+    static {
+        BenchToolFC4.randomSlice = new byte[65535];
+        new XORShiftRNG().nextBytes(randomSlice);
+    }
+
+
+    public BenchToolFC4() {
+        super();
+        if ( "java.util.Random".equals(System.getProperty("random.impl")) ) {
+            rnd = new Random();
+        } else {
+            rnd = new XORShiftRNG();
+        }
+    }
 
     private static final Logger LOG =
             LoggerFactory.getLogger(BenchToolFC4.class);
@@ -113,15 +130,9 @@ public class BenchToolFC4 {
         } else {
             LOG.info("ingesting {} objects with datastream size {}", numObjects, size);
         }
-       
+
         FileOutputStream ingestOut = null;
         List<String> pids = null;
-        Random rnd = null;
-        if ( "java.util.Random".equals(System.getProperty("random.impl")) ) {
-            rnd = new Random();
-        } else {
-            rnd = new XORShiftRNG();
-        }
         try {
             final int initialClusterSize = getClusterSize(uri);
             LOG.info("Initial cluster size is {}", initialClusterSize);
@@ -216,7 +227,7 @@ public class BenchToolFC4 {
                     new HttpPost(fedoraUri.toASCIIString() + "/rest/objects/" +
                             pid + "/DS1/fcr:content");
             post.setHeader("Content-Type", "application/octet-stream");
-            post.setEntity(new InputStreamEntity(new BenchToolInputStream(size), size));
+            post.setEntity(new InputStreamEntity(new BenchToolInputStream(size, randomSlice), size));
             long start = System.currentTimeMillis();
             HttpResponse resp = client.execute(post);
             String answer = IOUtils.toString(resp.getEntity().getContent());
@@ -273,7 +284,7 @@ public class BenchToolFC4 {
                     new HttpPut(fedoraUri.toASCIIString() + "/rest/objects/" +
                             pid + "/DS1/fcr:content");
             put.setHeader("Content-Type", "application/octet-stream");
-            put.setEntity(new InputStreamEntity(new BenchToolInputStream(size),size));
+            put.setEntity(new InputStreamEntity(new BenchToolInputStream(size, randomSlice),size));
             long start = System.currentTimeMillis();
             HttpResponse resp = client.execute(put);
             put.releaseConnection();

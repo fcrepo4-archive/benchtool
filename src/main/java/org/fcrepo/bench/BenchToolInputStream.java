@@ -5,9 +5,7 @@ package org.fcrepo.bench;
 
 import java.io.IOException;
 import java.io.InputStream;
-
 import java.util.Random;
-import org.uncommons.maths.random.XORShiftRNG;
 
 
 /**
@@ -17,20 +15,18 @@ import org.uncommons.maths.random.XORShiftRNG;
 public class BenchToolInputStream extends InputStream {
 
     private final long size;
-    private long idx = 0;
     private final Random rng;
+    private final byte[] slice;
 
-    public BenchToolInputStream(long size) {
+    private long bytesRead;
+    private int sliceIdx;
+
+    public BenchToolInputStream(long size, byte[] slice, Random rng) {
         super();
+        this.slice = slice;
         this.size = size;
-
-        if ( "java.util.Random".equals(System.getProperty("random.impl")) ) {
-            /* standard jdk random */
-            rng = new Random();
-        } else {
-            /* quite the fast RNG from uncommons-math */
-            rng = new XORShiftRNG();
-        }
+        this.rng = rng;
+        this.sliceIdx = rng.nextInt(Math.round(slice.length / 2f));
     }
 
     /* (non-Javadoc)
@@ -38,10 +34,19 @@ public class BenchToolInputStream extends InputStream {
      */
     @Override
     public int read() throws IOException {
-        if (idx++ <= size) {
-            return rng.nextInt();
-        }else {
-            throw new IOException("Inputstream size limit reached");
+        if (this.sliceIdx >= this.slice.length - this.sliceIdx){
+            this.sliceIdx = this.rng.nextInt(size - bytesRead > slice.length ? (int) Math.round(this.slice.length / 2f) : (int) (size - bytesRead));
         }
+        this.bytesRead++;
+        return this.slice[this.sliceIdx++];
+    }
+
+    /* (non-Javadoc)
+     * @see java.io.InputStream#close()
+     */
+    @Override
+    public void close() throws IOException {
+        System.out.println("closing after reading " +  bytesRead + " bytes");
+        super.close();
     }
 }
