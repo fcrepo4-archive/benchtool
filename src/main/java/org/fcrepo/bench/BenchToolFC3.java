@@ -29,6 +29,7 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.helpers.DefaultHandler;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -164,21 +165,42 @@ public class BenchToolFC3 {
     }
 
     private List<String> listObjects(int numObjects) throws Exception {
-        String uri = fedoraUri.toASCIIString() + "/objects?terms=test*"
-                + "&resultFormat=xml&pid=true&maxResults="+numObjects;
-        HttpGet get = new HttpGet(uri);
-        HttpResponse resp = client.execute(get,authContext);
-
-        List<String> pids = new ArrayList<String>();
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         DocumentBuilder builder = factory.newDocumentBuilder();
-        Document document = builder.parse( resp.getEntity().getContent() );
-        NodeList nodeList = document.getElementsByTagName("pid");
-        for ( int i = 0; i < nodeList.getLength() && i < numObjects; i++ ) {
-            Node n = nodeList.item(i);
-            pids.add( n.getTextContent() );
+        builder.setErrorHandler( new DefaultHandler() );
+        List<String> pids = new ArrayList<String>();
+        String token = null;
+        int lastSize = -1;
+        while ( pids.size() < numObjects && pids.size() > lastSize ) {
+            lastSize = pids.size();
+
+            // list pids
+            String uri = fedoraUri.toASCIIString() + "/objects?terms=test*"
+                    + "&resultFormat=xml&pid=true&maxResults="+numObjects;
+            if ( token != null ) { uri += "&sessionToken=" + token; }
+            HttpGet get = new HttpGet(uri);
+            HttpResponse resp = client.execute(get,authContext);
+
+            try {
+                Document doc = builder.parse( resp.getEntity().getContent() );
+                NodeList nl = doc.getElementsByTagName("pid");
+                for ( int i = 0; i < nl.getLength() && i < numObjects; i++ ) {
+                    Node n = nl.item(i);
+                    if ( !pids.contains(n.getTextContent()) ) {
+                        pids.add( n.getTextContent() );
+                    }
+                }
+
+                // get resume token
+                NodeList tokenList = doc.getElementsByTagName("token");
+                if ( tokenList.getLength() > 0 ) {
+                    token = tokenList.item(0).getTextContent();
+                }
+            } catch ( Exception e ) {
+            } finally {
+                get.releaseConnection();
+            }
         }
-        get.releaseConnection();
         return pids;
     }
     private String readProperty(String pid, String dsName, String property) throws Exception {
