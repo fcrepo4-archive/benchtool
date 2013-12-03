@@ -118,7 +118,8 @@ public class BenchTool {
             /* start the benchmark runner with the given parameters */
             FCRepoBenchRunner runner =
                     new FCRepoBenchRunner(getFedoraVersion(fedoraUri),
-                            fedoraUri, action, numBinaries, size, numThreads, logPath);
+                            fedoraUri, action, numBinaries, size, numThreads,
+                            logPath);
             runner.runBenchmark();
         } catch (IOException e) {
             LOG.error("Unable to connect to a Fedora instance at {}", fedoraUri);
@@ -128,29 +129,38 @@ public class BenchTool {
     @SuppressWarnings("static-access")
     private static Options createOptions() {
         Options ops = new Options();
-        ops.addOption(OptionBuilder.withArgName("fedora-url").withDescription(
-                "the URL of the fedora instance").withLongOpt("fedora-url")
-                .hasArg().create('f'));
+        ops.addOption(OptionBuilder
+                .withArgName("fedora-url")
+                .withDescription(
+                        "The URL of the Fedora instance. The url must include the context path of the webapp. " +
+                        "[default=http://localhost:8080]")
+                .withLongOpt("fedora-url").hasArg().create('f'));
         ops.addOption(OptionBuilder.withArgName("num-actions").withDescription(
-                "the number of actions performed").withLongOpt("num-actions")
-                .hasArg().create('n'));
+                "The number of actions performed. [default=1]").withLongOpt(
+                "num-actions").hasArg().create('n'));
         ops.addOption(OptionBuilder.withArgName("size").withDescription(
-                "the size of the individual binaries used").withLongOpt("size")
-                .hasArg().create('s'));
-        ops.addOption(OptionBuilder.withArgName("num-threads").withDescription(
-                "the number of threads used for performing all actions")
+                "The size of the individual binaries used. [default=1024]")
+                .withLongOpt("size").hasArg().create('s'));
+        ops.addOption(OptionBuilder
+                .withArgName("num-threads")
+                .withDescription(
+                        "The number of threads used for performing all actions. [default=1]")
                 .withLongOpt("num-threads").hasArg().create('t'));
         ops.addOption(OptionBuilder.withArgName("user").withDescription(
-                "the number of threads used for performing all actions")
-                .withLongOpt("user").hasArg().create('u'));
+                "The fedora user name").withLongOpt("user").hasArg()
+                .create('u'));
         ops.addOption(OptionBuilder.withArgName("password").withDescription(
-                "the number of threads used for performing all actions")
-                .withLongOpt("password").hasArg().create('p'));
-        ops.addOption(OptionBuilder.withArgName("action").withDescription(
-                "the action to perform. [ingest|read|update|delete]")
+                "The user's password").withLongOpt("password").hasArg().create(
+                'p'));
+        ops.addOption(OptionBuilder
+                .withArgName("action")
+                .withDescription(
+                        "The action to perform. Can be one of ingest, read, update or delete. [default=ingest]")
                 .withLongOpt("action").hasArg().create('a'));
-        ops.addOption(OptionBuilder.withArgName("log").withDescription(
-                "the log file to which the durations will get written")
+        ops.addOption(OptionBuilder
+                .withArgName("log")
+                .withDescription(
+                        "The log file to which the durations will get written. [default=durations.log]")
                 .withLongOpt("log").hasArg().create('l'));
         ops.addOption("h", "help", false, "print the help screen");
         return ops;
@@ -167,7 +177,10 @@ public class BenchTool {
                     fedoraUri);
         }
 
-        /* just check the html response for a characteristic String to determine the fedora version */
+        /*
+         * just check the html response for a characteristic String to determine
+         * the fedora version
+         */
         String html = EntityUtils.toString(resp.getEntity());
         get.releaseConnection();
         if (html.contains("<meta http-equiv=\"refresh\" content=\"0;url=describe\">") &&
