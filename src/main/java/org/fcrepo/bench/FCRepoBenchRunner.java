@@ -11,6 +11,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -51,10 +52,13 @@ public class FCRepoBenchRunner {
 
     private final ExecutorService executor;
 
+    private final FedoraRestClient fedora;
+
     private FileOutputStream logOut;
 
     public FCRepoBenchRunner(FedoraVersion version, URI fedoraUri,
-            Action action, int numBinaries, long size, int numThreads, String logpath) {
+            Action action, int numBinaries, long size, int numThreads,
+            String logpath) {
         super();
         this.version = version;
         this.fedoraUri = fedoraUri;
@@ -63,11 +67,14 @@ public class FCRepoBenchRunner {
         this.size = size;
         this.numThreads = numThreads;
         this.executor = Executors.newFixedThreadPool(numThreads);
+        this.fedora = FedoraRestClient.createClient(fedoraUri, version);
         try {
             this.logOut = new FileOutputStream(logpath);
         } catch (FileNotFoundException e) {
             this.logOut = null;
-            LOG.warn("Unable to open log file at {}. No log output will be generated",logpath);
+            LOG.warn(
+                    "Unable to open log file at {}. No log output will be generated",
+                    logpath);
         }
     }
 
@@ -86,6 +93,37 @@ public class FCRepoBenchRunner {
     }
 
     public void runBenchmark() {
+        this.logParameters();
+        /*
+         * first create the required top level objects so their creation won't
+         * affect the pure action performance
+         */
+        final List<String> pids = prepareObjects();
+
+        LOG.info("scheduling {} actions", numBinaries);
+
+        /* schedule all the action workers for execution */
+        final List<Future<BenchToolResult>> futures = new ArrayList<>();
+        for (String pid : pids) {
+            futures.add(executor.submit(new ActionWorker(action, fedoraUri, pid, size, version)));
+        }
+
+        /* retrieve the workers' results */
+        try {
+            this.fetchResults(futures);
+        } catch (InterruptedException | ExecutionException | IOException e) {
+            LOG.error("Error while getting results from worker threads",e);
+        }finally{
+            this.executor.shutdown();
+        }
+
+        /* delete all the created objects and datastreams from the repository */
+        this.purgeObjects(pids);
+
+        this.logResults();
+    }
+
+    private void logParameters() {
         LOG.info(
                 "Running {} {} action(s) against {} with a binary size of {} using {} thread(s)",
                 new Object[] {numBinaries, action.name(), version.name(), size,
@@ -94,39 +132,17 @@ public class FCRepoBenchRunner {
             LOG.info("The Fedora cluster has {} node(s) before the benchmark",
                     getClusterSize());
         }
-        /* schedule all the action workers for exectuion */
-        final List<Future<BenchToolResult>> futures = new ArrayList<>();
-        for (int i = 0; i < numBinaries; i++) {
-            /*
-             * schedule the worker thread for execution at some point in the
-             * future
-             */
-            futures.add(executor.submit(new ActionWorker(action, fedoraUri,
-                    size, version)));
-        }
+    }
 
-        /* retrieve the workers' results */
+    private void logResults() {
         long duration = 0;
         long numBytes = 0;
-        int count = 0;
-        float throughputPerThread = 0f;
-        for (Future<BenchToolResult> f : futures) {
-            try {
-                BenchToolResult res = f.get();
-                LOG.debug("{} of {} actions finished", ++count, numBinaries);
-                duration = duration + res.getDuration();
-                numBytes = numBytes + res.getSize();
-                if (logOut != null) {
-                    logOut.write((res.getDuration() + "\n").getBytes());
-                }
-                results.add(res);
-            } catch (InterruptedException | ExecutionException | IOException e) {
-                throw new RuntimeException(e);
-            } finally {
-                this.executor.shutdown();
-            }
+        for (BenchToolResult res : results) {
+            duration = duration + res.getDuration();
+            numBytes = numBytes + res.getSize();
         }
-        throughputPerThread = numBytes * 1000f / (1024f * 1024f * duration);
+        float throughputPerThread = 0f;
+        throughputPerThread = size * numBinaries * 1000f / (1024f * 1024f * duration);
 
         /* now the bench is finished and the result will be printed out */
         LOG.info("Completed {} {} action(s) executed in {} ms", new Object[] {
@@ -135,17 +151,47 @@ public class FCRepoBenchRunner {
             LOG.info("The Fedora cluster has {} node(s) after the benchmark",
                     getClusterSize());
         }
-        if (action == Action.UPDATE || action == Action.INGEST ||
-                action == Action.READ) {
-            if (numThreads == 1) {
-                LOG.info("Throughput was {} MB/sec", FORMAT
-                        .format(throughputPerThread));
-            } else {
-                LOG.info("Throughput was {} MB/sec", FORMAT
-                        .format(throughputPerThread * numThreads));
-                LOG.info("Throughput per thread was {} MB/sec", FORMAT
-                        .format(throughputPerThread));
-            }
+        if (numThreads == 1) {
+            LOG.info("Throughput was {} MB/sec", FORMAT
+                    .format(throughputPerThread));
+        } else {
+            LOG.info("Throughput was {} MB/sec", FORMAT
+                    .format(throughputPerThread * numThreads));
+            LOG.info("Throughput per thread was {} MB/sec", FORMAT
+                    .format(throughputPerThread));
         }
+    }
+
+    private List<BenchToolResult> fetchResults(List<Future<BenchToolResult>> futures) throws InterruptedException, ExecutionException, IOException {
+        int count = 0;
+        for (Future<BenchToolResult> f : futures) {
+                BenchToolResult res = f.get();
+                LOG.debug("{} of {} actions finished", ++count, numBinaries);
+                if (logOut != null) {
+                    logOut.write((res.getDuration() + "\n").getBytes());
+                }
+                results.add(res);
+        }
+        return results;
+    }
+
+    private void purgeObjects(List<String> pids) {
+        LOG.info("purging {} objects and datastreams", numBinaries);
+        fedora.purgeObjects(pids,action != Action.DELETE);
+    }
+
+    private List<String> prepareObjects() {
+        final List<String> pids = new ArrayList<>();
+        LOG.info("preparing {} objects", numBinaries);
+        for (int i = 0; i < numBinaries; i++) {
+            pids.add(UUID.randomUUID().toString());
+        }
+        fedora.createObjects(pids);
+        if (this.action == Action.UPDATE || this.action == Action.READ || this.action == Action.DELETE) {
+            LOG.info("preparing {} datastreams of size {} for {}", new Object[] {numBinaries, size, action});
+            // add datastreams in preparation which can be manipulated
+            fedora.createDatastreams(pids, size);
+        }
+        return pids;
     }
 }

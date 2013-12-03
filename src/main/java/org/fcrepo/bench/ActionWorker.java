@@ -3,7 +3,6 @@ package org.fcrepo.bench;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.UUID;
 import java.util.concurrent.Callable;
 
 import org.fcrepo.bench.BenchTool.Action;
@@ -17,12 +16,15 @@ public class ActionWorker implements Callable<BenchToolResult> {
 
     private final Action action;
 
-    public ActionWorker(Action action, URI fedoraUri, long binarySize,
+    private final String pid;
+
+    public ActionWorker(Action action, URI fedoraUri, String pid, long binarySize,
             FedoraVersion version) {
         super();
         this.binarySize = binarySize;
         this.fedora = FedoraRestClient.createClient(fedoraUri, version);
         this.action = action;
+        this.pid = pid;
     }
 
     /*
@@ -32,7 +34,6 @@ public class ActionWorker implements Callable<BenchToolResult> {
     @Override
     public BenchToolResult call() throws Exception {
         /* check the action and run the appropriate test */
-        BenchToolResult result;
         switch (this.action) {
             case INGEST:
                 return doIngest();
@@ -50,28 +51,24 @@ public class ActionWorker implements Callable<BenchToolResult> {
     }
 
     private BenchToolResult doDelete() throws IOException {
-        String pid = UUID.randomUUID().toString();
-        long duration = fedora.delete(pid, binarySize);
+        long duration = fedora.deleteDatastream(pid);
         return new BenchToolResult(-1f, duration, binarySize);
     }
 
     private BenchToolResult doRead() throws IOException {
-        String pid = UUID.randomUUID().toString();
-        long duration = fedora.retrieve(pid, binarySize);
+        long duration = fedora.retrieveDatastream(pid);
         float tp = binarySize * 1000f / duration;
         return new BenchToolResult(tp, duration, binarySize);
     }
 
     private BenchToolResult doUpdate() throws IOException {
-        String pid = UUID.randomUUID().toString();
-        long duration = fedora.update(pid, binarySize);
+        long duration = fedora.updateDatastream(pid,binarySize);
         float tp = binarySize * 1000f / duration;
         return new BenchToolResult(tp, duration, binarySize);
     }
 
     private BenchToolResult doIngest() throws IOException {
-        String pid = UUID.randomUUID().toString();
-        long duration = fedora.create(pid, binarySize);
+        long duration = fedora.createDatastream(pid, binarySize);
         float tp = binarySize * 1000f / duration;
         return new BenchToolResult(tp, duration, binarySize);
     }

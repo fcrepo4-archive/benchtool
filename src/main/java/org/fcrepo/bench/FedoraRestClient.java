@@ -3,10 +3,16 @@ package org.fcrepo.bench;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 
 import org.fcrepo.bench.BenchTool.FedoraVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class FedoraRestClient {
+
+    private static final Logger LOG =
+            LoggerFactory.getLogger(FedoraRestClient.class);
 
     private final FedoraVersion version;
 
@@ -25,65 +31,37 @@ public abstract class FedoraRestClient {
     protected abstract long retrieveDatastream(String pid) throws IOException;
     protected abstract long updateDatastream(String pid, long size) throws IOException;
 
-    final long create(String pid, long size) throws IOException {
-        /* first create a new FedoraObject */
-        this.createObject(pid);
-
-        /* add a datastream and only measure this period */
-        long duration = this.createDatastream(pid, size);
-
-        /* clean up the ds and the parent object */
-        this.deleteDatastream(pid);
-        this.deleteObject(pid);
-        return duration;
+    final void purgeObjects(List<String> pids, boolean removeDatastreams) {
+        for (String pid : pids) {
+            try {
+                if (removeDatastreams) {
+                    this.deleteDatastream(pid);;
+                }
+                this.deleteObject(pid);
+            } catch (IOException e) {
+                LOG.error("Unable to prepare objects in Fedora", e);
+            }
+        }
     }
 
-    final long update(String pid, long size) throws IOException {
-        /*
-         * first create an object with a datastream and the measure the update
-         * time
-         */
-        this.createObject(pid);
-        this.createDatastream(pid, size);
-
-        /* measure the update */
-        long duration = this.updateDatastream(pid, size);
-
-        /* finally delete the parent object */
-        this.deleteDatastream(pid);
-        this.deleteObject(pid);
-        return duration;
+    final void createObjects(List<String> pids) {
+        for (String pid : pids) {
+            try {
+                this.createObject(pid);
+            } catch (IOException e) {
+                LOG.error("Unable to prepare objects in Fedora", e);
+            }
+        }
     }
 
-    final long retrieve(String pid, long size) throws IOException {
-        /*
-         * first create an object with a datastream and the measure the
-         * retrieval time
-         */
-        this.createObject(pid);
-        this.createDatastream(pid, size);
-
-        long duration = this.retrieveDatastream(pid);
-
-        /* finally delete the parent object */
-        this.deleteDatastream(pid);
-        this.deleteObject(pid);
-        return duration;
-    }
-
-    final long delete(String pid, long size) throws IOException {
-        /*
-         * first create an object with a datastream and the measure the
-         * removal time for the datastream
-         */
-        this.createObject(pid);
-        this.createDatastream(pid, size);
-
-        long duration = this.deleteDatastream(pid);
-
-        /* finally delete the parent object */
-        this.deleteObject(pid);
-        return duration;
+    public void createDatastreams(List<String> pids, long size) {
+        for (String pid : pids) {
+            try {
+                this.createDatastream(pid, size);
+            } catch (IOException e) {
+                LOG.error("Unable to prepare datastream in Fedora", e);
+            }
+        }
     }
 
     public static FedoraRestClient createClient(URI fedoraUri,
@@ -99,5 +77,4 @@ public abstract class FedoraRestClient {
                                 version.name());
         }
     }
-
 }
