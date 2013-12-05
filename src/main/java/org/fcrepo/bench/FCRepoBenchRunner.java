@@ -148,9 +148,8 @@ public class FCRepoBenchRunner {
                 size * numBinaries * 1000f / (1024f * 1024f * duration);
 
         /* now the bench is finished and the result will be printed out */
-        LOG.info("Completed {} {} action(s) executed in {} ms",
-                new Object[] {this.numBinaries, action,
-                        (long)((float) duration / (float) numThreads)});
+        LOG.info("Completed {} {} action(s)",
+                new Object[] {this.numBinaries, action});
         LOG.info("Runtime excluding the threading overhead was {} ms",
                 (long) ((float) duration / (float) numThreads));
         LOG.info("Runtime including the threading overhead was {} ms", runtime);
