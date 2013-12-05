@@ -147,28 +147,25 @@ public class FCRepoBenchRunner {
         throughputPerThread =
                 size * numBinaries * 1000f / (1024f * 1024f * duration);
 
-        /* now the bench is finished and the result will be printed out */
-        LOG.info("Completed {} {} action(s)",
-                new Object[] {this.numBinaries, action});
-        LOG.info("Runtime excluding the threading overhead was {} ms",
-                (long) ((float) duration / (float) numThreads));
-        LOG.info("Runtime including the threading overhead was {} ms", runtime);
-        LOG.info("Threading overhead was {} ms", runtime -
-                (long) ((float) duration / (float) numThreads));
-        LOG.info("Complete benchmark took {} ms", new Object[] {overall});
         if (version == FedoraVersion.FCREPO4) {
             LOG.info("The Fedora cluster has {} node(s) after the benchmark",
                     getClusterSize());
         }
+
+        LOG.info("Completed {} {} action(s)",
+                new Object[] {this.numBinaries, action});
+        LOG.info("-------------------------------------------------");
+        LOG.info("Overall runtime:\t\t\t{} ms",overall);
+        LOG.info("Benchmark runtime:\t\t\t{} ms",runtime);
+        LOG.info("Benchmark runtime w/o thread overhead\t{} ms",(long) ((float) duration / (float) numThreads));
+        LOG.info("Thread overhead:\t\t\t{} ms",runtime - (long) ((float) duration / (float) numThreads));
         if (numThreads == 1) {
-            LOG.info("Throughput was {} MB/sec", FORMAT
-                    .format(throughputPerThread));
+            LOG.info("Avg. throughput:\t\t\t{} mb/sec", FORMAT.format(throughputPerThread));
         } else {
-            LOG.info("Throughput was {} MB/sec", FORMAT
-                    .format(throughputPerThread * numThreads));
-            LOG.info("Throughput per thread was {} MB/sec", FORMAT
-                    .format(throughputPerThread));
+            LOG.info("Avg. throughput:\t\t\t{} mb/sec", FORMAT.format(throughputPerThread * numThreads));
+            LOG.info("Avg. throughput/thread:\t\t\t{} mb/sec", FORMAT.format(throughputPerThread));
         }
+        LOG.info("-------------------------------------------------");
     }
 
     private long fetchResults(List<Future<BenchToolResult>> futures) throws InterruptedException, ExecutionException, IOException {
