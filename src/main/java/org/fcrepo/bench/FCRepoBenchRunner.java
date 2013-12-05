@@ -93,6 +93,7 @@ public class FCRepoBenchRunner {
     }
 
     public void runBenchmark() {
+        long time = System.currentTimeMillis();
         this.logParameters();
         /*
          * first create the required top level objects so their creation won't
@@ -109,18 +110,19 @@ public class FCRepoBenchRunner {
         }
 
         /* retrieve the workers' results */
+        long runtime = 0;
         try {
-            this.fetchResults(futures);
+            runtime = this.fetchResults(futures);
         } catch (InterruptedException | ExecutionException | IOException e) {
-            LOG.error("Error while getting results from worker threads",e);
-        }finally{
+            LOG.error("Error while getting results from worker threads", e);
+        } finally {
             this.executor.shutdown();
         }
 
         /* delete all the created objects and datastreams from the repository */
         this.purgeObjects(pids);
 
-        this.logResults();
+        this.logResults(System.currentTimeMillis() - time, runtime);
     }
 
     private void logParameters() {
@@ -134,7 +136,7 @@ public class FCRepoBenchRunner {
         }
     }
 
-    private void logResults() {
+    private void logResults(long overall, long runtime) {
         long duration = 0;
         long numBytes = 0;
         for (BenchToolResult res : results) {
@@ -142,11 +144,19 @@ public class FCRepoBenchRunner {
             numBytes = numBytes + res.getSize();
         }
         float throughputPerThread = 0f;
-        throughputPerThread = size * numBinaries * 1000f / (1024f * 1024f * duration);
+        throughputPerThread =
+                size * numBinaries * 1000f / (1024f * 1024f * duration);
 
         /* now the bench is finished and the result will be printed out */
-        LOG.info("Completed {} {} action(s) executed in {} ms", new Object[] {
-                this.numBinaries, action, duration});
+        LOG.info("Completed {} {} action(s) executed in {} ms",
+                new Object[] {this.numBinaries, action,
+                        (long)((float) duration / (float) numThreads)});
+        LOG.info("Runtime excluding the threading overhead was {} ms",
+                (long) ((float) duration / (float) numThreads));
+        LOG.info("Runtime including the threading overhead was {} ms", runtime);
+        LOG.info("Threading overhead was {} ms", runtime -
+                (long) ((float) duration / (float) numThreads));
+        LOG.info("Complete benchmark took {} ms", new Object[] {overall});
         if (version == FedoraVersion.FCREPO4) {
             LOG.info("The Fedora cluster has {} node(s) after the benchmark",
                     getClusterSize());
@@ -162,17 +172,18 @@ public class FCRepoBenchRunner {
         }
     }
 
-    private List<BenchToolResult> fetchResults(List<Future<BenchToolResult>> futures) throws InterruptedException, ExecutionException, IOException {
+    private long fetchResults(List<Future<BenchToolResult>> futures) throws InterruptedException, ExecutionException, IOException {
         int count = 0;
+        long time = System.currentTimeMillis();
         for (Future<BenchToolResult> f : futures) {
-                BenchToolResult res = f.get();
-                LOG.debug("{} of {} actions finished", ++count, numBinaries);
-                if (logOut != null) {
-                    logOut.write((res.getDuration() + "\n").getBytes());
-                }
-                results.add(res);
+            BenchToolResult res = f.get();
+            LOG.debug("{} of {} actions finished", ++count, numBinaries);
+            if (logOut != null) {
+                logOut.write((res.getDuration() + "\n").getBytes());
+            }
+            results.add(res);
         }
-        return results;
+        return System.currentTimeMillis() - time;
     }
 
     private void purgeObjects(List<String> pids) {
