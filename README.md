@@ -1,5 +1,9 @@
+----
+# This project is no longer maintained
+----
+
 BenchTool for Fedora 3/4
-=======================================================================================
+----
 This is a simple ingest/retrieve/update/delete benchmark to compare performance of Fedora 3 and Fedora 4. 
 The suite consists of a jar file which can be run directly. The Fedora version will be automatically discovered depending on the given URL.
 The url should include the context path of the webapp. For example `http://localhost:8080/fcrepo` for a Fedora version deployed at the context path `fcrepo`. 
